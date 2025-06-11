@@ -25,44 +25,44 @@ cache/
 tmp/
 temp/
 
-# IDE and Editor Files
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# # IDE and Editor Files
+# .vscode/
+# .idea/
+# *.swp
+# *.swo
+# *~
 
-# OS Generated Files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# # OS Generated Files
+# .DS_Store
+# .DS_Store?
+# ._*
+# .Spotlight-V100
+# .Trashes
+# ehthumbs.db
+# Thumbs.db
 
-# PHP Specific
-vendor/
-composer.lock
+# # PHP Specific
+# vendor/
+# composer.lock
 
-# Node.js (if using any frontend build tools)
-node_modules/
-npm-debug.log
-yarn-error.log
+# # Node.js (if using any frontend build tools)
+# node_modules/
+# npm-debug.log
+# yarn-error.log
 
-# Backup Files
-*.bak
-*.backup
-*.sql.bak
+# # Backup Files
+# *.bak
+# *.backup
+# *.sql.bak
 
-# Session Files
-sessions/
+# # Session Files
+# sessions/
 
-# Admin Setup Files (remove after setup)
-admin/setup.php
-admin/debug.php
+# # Admin Setup Files (remove after setup)
+# admin/setup.php
+# admin/debug.php
 
-# Development Files
-test.php
-debug.php
-phpinfo.php
+# # Development Files
+# test.php
+# debug.php
+# phpinfo.php
