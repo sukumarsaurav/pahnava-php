@@ -8,10 +8,12 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
-// Helper function for redirects
-function redirect($url) {
-    header("Location: $url");
-    exit;
+// Helper function for redirects (only if not already defined)
+if (!function_exists('redirect')) {
+    function redirect($url) {
+        header("Location: $url");
+        exit;
+    }
 }
 
 // Start session

@@ -5,32 +5,33 @@
  * @security Admin authentication required
  */
 
-// Helper function for redirects
-function redirect($url) {
-    header("Location: $url");
-    exit;
-}
-
 // Start session
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Check if setup is required first
-if (!file_exists('../config/database.php')) {
-    redirect('../deploy.php');
+// Simple redirect function with unique name
+function adminRedirect($url) {
+    header("Location: $url");
+    exit;
 }
 
-// Include required files with error handling
+// Check if setup is required
+if (!file_exists('../config/database.php')) {
+    adminRedirect('../deploy.php');
+}
+
 try {
+    // Include database first
     require_once '../config/database.php';
 
     // Check if admin tables exist
     $adminUserTable = $db->fetchRow("SHOW TABLES LIKE 'admin_users'");
     if (!$adminUserTable) {
-        redirect('setup.php');
+        adminRedirect('setup.php');
     }
 
+    // Include other required files
     require_once '../includes/security.php';
     require_once '../includes/functions.php';
     require_once 'includes/admin-auth.php';
@@ -44,7 +45,7 @@ try {
 
 } catch (Exception $e) {
     // Redirect to safe version if there are issues
-    redirect('index-safe.php');
+    adminRedirect('index-safe.php');
 }
 
 // Get current page
@@ -53,12 +54,12 @@ $page = Security::sanitizeInput($_GET['page'] ?? 'dashboard');
 // Check if admin is logged in
 if (!$adminAuth->isLoggedIn()) {
     if ($page !== 'login') {
-        redirect('?page=login');
+        adminRedirect('?page=login');
     }
 } else {
     // Redirect to dashboard if trying to access login while logged in
     if ($page === 'login') {
-        redirect('?page=dashboard');
+        adminRedirect('?page=dashboard');
     }
 }
 
