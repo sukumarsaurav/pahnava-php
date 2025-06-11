@@ -12,9 +12,9 @@ class Database {
     
     // Database configuration
     private $host = 'localhost';
-    private $username = 'root';
-    private $password = '';
-    private $database = 'pahnava_ecommerce';
+    private $username = 'u911550082_pahnava';
+    private $password = 'Mik@sdk14';
+    private $database = 'u911550082_pahnava';
     private $charset = 'utf8mb4';
     
     private function __construct() {
