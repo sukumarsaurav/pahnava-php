@@ -437,6 +437,77 @@ INSERT INTO categories (parent_id, name, slug, description, is_active, sort_orde
 (2, 'Jeans', 'women-jeans', 'Women\'s jeans collection', true, 3),
 (2, 'Ethnic Wear', 'women-ethnic', 'Women\'s ethnic wear', true, 4);
 
+-- Admin Remember Tokens Table
+CREATE TABLE admin_remember_tokens (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    admin_id INT NOT NULL,
+    token VARCHAR(255) NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+    INDEX idx_admin_id (admin_id),
+    INDEX idx_token (token),
+    INDEX idx_expires_at (expires_at)
+);
+
+-- Admin Activity Logs Table
+CREATE TABLE admin_activity_logs (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    admin_id INT NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    details JSON,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE CASCADE,
+    INDEX idx_admin_id (admin_id),
+    INDEX idx_action (action),
+    INDEX idx_created_at (created_at)
+);
+
+-- Order Status History Table
+CREATE TABLE order_status_history (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    order_id INT NOT NULL,
+    status VARCHAR(50) NOT NULL,
+    notes TEXT,
+    admin_id INT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id) REFERENCES admin_users(id) ON DELETE SET NULL,
+    INDEX idx_order_id (order_id),
+    INDEX idx_status (status),
+    INDEX idx_admin_id (admin_id)
+);
+
+-- Security Events Table
+CREATE TABLE security_events (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    event_type VARCHAR(100) NOT NULL,
+    details JSON,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_event_type (event_type),
+    INDEX idx_ip_address (ip_address),
+    INDEX idx_created_at (created_at)
+);
+
+-- Rate Limiting Table
+CREATE TABLE rate_limits (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    identifier VARCHAR(255) NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    attempts INT DEFAULT 1,
+    window_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_rate_limit (identifier, action),
+    INDEX idx_identifier (identifier),
+    INDEX idx_action (action),
+    INDEX idx_window_start (window_start)
+);
+
 -- Insert default email templates
 INSERT INTO email_templates (name, subject, body, variables) VALUES
 ('welcome', 'Welcome to Pahnava!',
