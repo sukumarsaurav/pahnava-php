@@ -1,24 +1,51 @@
 <?php
 /**
  * Admin Panel - Main Entry Point
- * 
+ *
  * @security Admin authentication required
  */
 
-session_start();
+// Helper function for redirects
+function redirect($url) {
+    header("Location: $url");
+    exit;
+}
 
-// Include required files
-require_once '../config/database.php';
-require_once '../includes/security.php';
-require_once '../includes/functions.php';
-require_once 'includes/admin-auth.php';
-require_once 'includes/admin-functions.php';
+// Start session
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
-// Initialize security
-Security::init();
+// Check if setup is required first
+if (!file_exists('../config/database.php')) {
+    redirect('../deploy.php');
+}
 
-// Initialize admin auth
-$adminAuth = new AdminAuth($db);
+// Include required files with error handling
+try {
+    require_once '../config/database.php';
+
+    // Check if admin tables exist
+    $adminUserTable = $db->fetchRow("SHOW TABLES LIKE 'admin_users'");
+    if (!$adminUserTable) {
+        redirect('setup.php');
+    }
+
+    require_once '../includes/security.php';
+    require_once '../includes/functions.php';
+    require_once 'includes/admin-auth.php';
+    require_once 'includes/admin-functions.php';
+
+    // Initialize security
+    Security::init();
+
+    // Initialize admin auth
+    $adminAuth = new AdminAuth($db);
+
+} catch (Exception $e) {
+    // Redirect to safe version if there are issues
+    redirect('index-safe.php');
+}
 
 // Get current page
 $page = Security::sanitizeInput($_GET['page'] ?? 'dashboard');
@@ -26,12 +53,12 @@ $page = Security::sanitizeInput($_GET['page'] ?? 'dashboard');
 // Check if admin is logged in
 if (!$adminAuth->isLoggedIn()) {
     if ($page !== 'login') {
-        redirect('admin/?page=login');
+        redirect('?page=login');
     }
 } else {
     // Redirect to dashboard if trying to access login while logged in
     if ($page === 'login') {
-        redirect('admin/');
+        redirect('?page=dashboard');
     }
 }
 
@@ -123,11 +150,4 @@ if ($page !== 'login') {
     include 'includes/footer.php';
 }
 
-/**
- * Helper function for redirects
- */
-function redirect($url) {
-    header("Location: $url");
-    exit;
-}
 ?>
