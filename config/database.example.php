@@ -1,7 +1,7 @@
 <?php
 /**
- * Database Configuration and Connection
- * Secure MySQL connection with error handling
+ * Database Configuration Template
+ * Copy this file to database.php and update with your credentials
  * 
  * @security Uses prepared statements and secure connection
  */
@@ -10,11 +10,11 @@ class Database {
     private static $instance = null;
     private $connection;
     
-    // Database configuration
+    // Database configuration - UPDATE THESE VALUES
     private $host = 'localhost';
-    private $username = 'u911550082_pahnava';
-    private $password = 'Milk@sdk14';
-    private $database = 'u911550082_pahnava';
+    private $username = 'your_database_username';
+    private $password = 'your_database_password';
+    private $database = 'your_database_name';
     private $charset = 'utf8mb4';
     
     private function __construct() {
@@ -97,14 +97,14 @@ class Database {
     public function lastInsertId() {
         return $this->connection->lastInsertId();
     }
-
+    
     /**
      * Get row count from last statement
      */
     public function rowCount() {
         return $this->connection->rowCount();
     }
-
+    
     /**
      * Check if in transaction
      */

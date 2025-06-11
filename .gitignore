@@ -1,0 +1,68 @@
+# Pahnava Ecommerce - Git Ignore File
+# Prevents sensitive files from being committed to Git
+
+# Database Configuration (contains sensitive credentials)
+config/database.php
+
+# Environment Configuration
+.env
+.env.local
+.env.production
+
+# Upload Directories
+uploads/
+uploads/*
+!uploads/.gitkeep
+
+# Log Files
+logs/
+*.log
+error.log
+access.log
+
+# Cache Files
+cache/
+tmp/
+temp/
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# PHP Specific
+vendor/
+composer.lock
+
+# Node.js (if using any frontend build tools)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Backup Files
+*.bak
+*.backup
+*.sql.bak
+
+# Session Files
+sessions/
+
+# Admin Setup Files (remove after setup)
+admin/setup.php
+admin/debug.php
+
+# Development Files
+test.php
+debug.php
+phpinfo.php

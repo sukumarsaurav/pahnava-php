@@ -1,5 +1,22 @@
 <?php
 /**
+ * Pahnava Deployment Script
+ * Automatically configures database and sets up the system
+ */
+
+// Your database credentials
+$DB_HOST = 'localhost';
+$DB_USERNAME = 'u911550082_pahnava';
+$DB_PASSWORD = 'Milk@sdk14';
+$DB_NAME = 'u911550082_pahnava';
+
+echo "<h1>🚀 Pahnava Deployment Script</h1>";
+
+// Step 1: Create database configuration file
+echo "<h2>Step 1: Creating Database Configuration</h2>";
+
+$databaseConfig = '<?php
+/**
  * Database Configuration and Connection
  * Secure MySQL connection with error handling
  * 
@@ -11,11 +28,11 @@ class Database {
     private $connection;
     
     // Database configuration
-    private $host = 'localhost';
-    private $username = 'u911550082_pahnava';
-    private $password = 'Milk@sdk14';
-    private $database = 'u911550082_pahnava';
-    private $charset = 'utf8mb4';
+    private $host = \'' . $DB_HOST . '\';
+    private $username = \'' . $DB_USERNAME . '\';
+    private $password = \'' . $DB_PASSWORD . '\';
+    private $database = \'' . $DB_NAME . '\';
+    private $charset = \'utf8mb4\';
     
     private function __construct() {
         $this->connect();
@@ -97,14 +114,14 @@ class Database {
     public function lastInsertId() {
         return $this->connection->lastInsertId();
     }
-
+    
     /**
      * Get row count from last statement
      */
     public function rowCount() {
         return $this->connection->rowCount();
     }
-
+    
     /**
      * Check if in transaction
      */
@@ -150,4 +167,84 @@ try {
     error_log("Database initialization failed: " . $e->getMessage());
     die("System temporarily unavailable. Please try again later.");
 }
+?>';
+
+// Write database configuration
+if (file_put_contents('config/database.php', $databaseConfig)) {
+    echo "<p>✅ Database configuration created successfully</p>";
+} else {
+    echo "<p>❌ Failed to create database configuration</p>";
+    exit;
+}
+
+// Step 2: Test database connection
+echo "<h2>Step 2: Testing Database Connection</h2>";
+try {
+    require_once 'config/database.php';
+    echo "<p>✅ Database connection successful</p>";
+} catch (Exception $e) {
+    echo "<p>❌ Database connection failed: " . $e->getMessage() . "</p>";
+    exit;
+}
+
+// Step 3: Create necessary directories
+echo "<h2>Step 3: Creating Directories</h2>";
+$directories = [
+    'uploads',
+    'uploads/products',
+    'uploads/categories',
+    'uploads/brands',
+    'uploads/users',
+    'logs',
+    'cache'
+];
+
+foreach ($directories as $dir) {
+    if (!is_dir($dir)) {
+        if (mkdir($dir, 0755, true)) {
+            echo "<p>✅ Created directory: $dir</p>";
+        } else {
+            echo "<p>⚠️ Failed to create directory: $dir</p>";
+        }
+    } else {
+        echo "<p>✅ Directory exists: $dir</p>";
+    }
+}
+
+// Step 4: Set file permissions
+echo "<h2>Step 4: Setting File Permissions</h2>";
+$permissionFiles = [
+    'config' => 0755,
+    'uploads' => 0755,
+    'logs' => 0755,
+    'cache' => 0755
+];
+
+foreach ($permissionFiles as $path => $permission) {
+    if (is_dir($path)) {
+        if (chmod($path, $permission)) {
+            echo "<p>✅ Set permissions for: $path</p>";
+        } else {
+            echo "<p>⚠️ Failed to set permissions for: $path</p>";
+        }
+    }
+}
+
+echo "<h2>🎉 Deployment Complete!</h2>";
+echo "<p><strong>Next Steps:</strong></p>";
+echo "<ol>";
+echo "<li><a href='admin/setup.php'>Run Admin Setup</a> - Creates admin tables and default user</li>";
+echo "<li><a href='admin/'>Access Admin Panel</a> - Login with admin/admin123</li>";
+echo "<li><a href='index.php'>View Frontend</a> - Check the main website</li>";
+echo "</ol>";
+
+echo "<p><strong>Security Reminders:</strong></p>";
+echo "<ul>";
+echo "<li>Change the default admin password immediately</li>";
+echo "<li>Delete this deploy.php file after deployment</li>";
+echo "<li>Review and update .gitignore file</li>";
+echo "</ul>";
+
+echo "<hr>";
+echo "<p><small>Deployment completed at " . date('Y-m-d H:i:s') . "</small></p>";
 ?>
