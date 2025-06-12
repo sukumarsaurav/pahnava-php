@@ -11,35 +11,50 @@ require_once '../includes/security.php';
 echo "<h1>🔧 Admin User Reset</h1>";
 
 try {
+    // First check if admin_users table exists
+    $tableCheck = $db->fetchRow("SHOW TABLES LIKE 'admin_users'");
+    if (!$tableCheck) {
+        echo "<div style='color: red;'>❌ admin_users table does not exist!</div>";
+        echo "<p><a href='setup.php'>Run Admin Setup</a> to create the table first.</p>";
+        exit;
+    }
+
     // Check if admin user exists
     $adminQuery = "SELECT * FROM admin_users WHERE username = 'admin'";
     $admin = $db->fetchRow($adminQuery);
-    
+
     if (!$admin) {
         echo "<div style='color: red;'>❌ Admin user not found. Creating new admin user...</div>";
-        
-        // Create new admin user
-        $password = password_hash('admin123', PASSWORD_ARGON2ID, [
-            'memory_cost' => 65536,
-            'time_cost' => 4,
-            'threads' => 3
-        ]);
-        
-        $insertQuery = "INSERT INTO admin_users (username, email, password, first_name, last_name, role, is_active) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?)";
-        
-        $db->execute($insertQuery, [
-            'admin',
-            'admin@pahnava.com',
-            $password,
-            'Admin',
-            'User',
-            'super_admin',
-            1
-        ]);
-        
-        echo "<div style='color: green;'>✅ New admin user created successfully!</div>";
-        
+
+        // Create new admin user with better error handling
+        try {
+            $password = password_hash('admin123', PASSWORD_ARGON2ID, [
+                'memory_cost' => 65536,
+                'time_cost' => 4,
+                'threads' => 3
+            ]);
+
+            $insertQuery = "INSERT INTO admin_users (username, email, password, first_name, last_name, role, is_active, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+
+            $stmt = $db->execute($insertQuery, [
+                'admin',
+                'admin@pahnava.com',
+                $password,
+                'Admin',
+                'User',
+                'super_admin',
+                1
+            ]);
+
+            $newAdminId = $db->lastInsertId();
+            echo "<div style='color: green;'>✅ New admin user created successfully! ID: $newAdminId</div>";
+
+        } catch (Exception $e) {
+            echo "<div style='color: red;'>❌ Failed to create admin user: " . htmlspecialchars($e->getMessage()) . "</div>";
+            throw $e;
+        }
+
     } else {
         echo "<div style='color: green;'>✅ Admin user found:</div>";
         echo "<ul>";

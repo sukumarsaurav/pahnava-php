@@ -145,48 +145,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Update admin credentials if no errors
     if (empty($errors)) {
         try {
-            $db->beginTransaction();
-            
-            // Hash the new password
-            $hashedPassword = password_hash($newPassword, PASSWORD_ARGON2ID, [
-                'memory_cost' => 65536,
-                'time_cost' => 4,
-                'threads' => 3
-            ]);
-            
-            // Update admin user
-            $updateQuery = "UPDATE admin_users SET 
-                           username = ?, 
-                           email = ?, 
-                           password = ?, 
-                           first_name = ?, 
-                           last_name = ?, 
-                           failed_attempts = 0, 
-                           locked_until = NULL, 
-                           updated_at = NOW() 
-                           WHERE id = ?";
-            
-            $db->execute($updateQuery, [
-                $newUsername,
-                $newEmail,
-                $hashedPassword,
-                $firstName,
-                $lastName,
-                $currentAdmin['id']
-            ]);
-            
-            $db->commit();
-            
-            // Create lock file to prevent reuse
-            file_put_contents($lockFile, date('Y-m-d H:i:s') . " - Credentials updated successfully\n");
-            
-            $success = 'Admin credentials updated successfully!';
-            
-            // Log the update
-            error_log("Admin credentials updated: $currentUsername -> $newUsername at " . date('Y-m-d H:i:s'));
-            
+            // Check if admin_users table exists
+            $tableCheck = $db->fetchRow("SHOW TABLES LIKE 'admin_users'");
+            if (!$tableCheck) {
+                $errors[] = 'Admin users table does not exist. Please run setup first.';
+            } else {
+                $db->beginTransaction();
+
+                // Hash the new password
+                $hashedPassword = password_hash($newPassword, PASSWORD_ARGON2ID, [
+                    'memory_cost' => 65536,
+                    'time_cost' => 4,
+                    'threads' => 3
+                ]);
+
+                // Update admin user
+                $updateQuery = "UPDATE admin_users SET
+                               username = ?,
+                               email = ?,
+                               password = ?,
+                               first_name = ?,
+                               last_name = ?,
+                               failed_attempts = 0,
+                               locked_until = NULL,
+                               updated_at = NOW()
+                               WHERE id = ?";
+
+                $stmt = $db->execute($updateQuery, [
+                    $newUsername,
+                    $newEmail,
+                    $hashedPassword,
+                    $firstName,
+                    $lastName,
+                    $currentAdmin['id']
+                ]);
+
+                $rowsAffected = $db->rowCount();
+
+                if ($rowsAffected > 0) {
+                    $db->commit();
+
+                    // Create lock file to prevent reuse
+                    file_put_contents($lockFile, date('Y-m-d H:i:s') . " - Credentials updated successfully\n");
+
+                    $success = 'Admin credentials updated successfully!';
+
+                    // Log the update
+                    error_log("Admin credentials updated: $currentUsername -> $newUsername at " . date('Y-m-d H:i:s'));
+                } else {
+                    $db->rollback();
+                    $errors[] = 'No rows were updated. Please check if the current username exists.';
+                }
+            }
+
         } catch (Exception $e) {
-            $db->rollback();
+            if ($db->inTransaction()) {
+                $db->rollback();
+            }
+            error_log("Credentials update error: " . $e->getMessage());
             $errors[] = 'Failed to update credentials: ' . $e->getMessage();
         }
     }

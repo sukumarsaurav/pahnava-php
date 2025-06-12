@@ -9,7 +9,8 @@
 class Database {
     private static $instance = null;
     private $connection;
-    
+    private $lastStatement = null;
+
     // Database configuration
     private $host = 'localhost';
     private $username = 'u911550082_pahnava';
@@ -68,10 +69,11 @@ class Database {
         try {
             $stmt = $this->connection->prepare($query);
             $stmt->execute($params);
+            $this->lastStatement = $stmt; // Store for rowCount
             return $stmt;
         } catch (PDOException $e) {
-            error_log("Query execution failed: " . $e->getMessage());
-            throw new Exception("Database operation failed");
+            error_log("Query execution failed: " . $e->getMessage() . " Query: " . $query);
+            throw new Exception("Database operation failed: " . $e->getMessage());
         }
     }
     
@@ -102,7 +104,10 @@ class Database {
      * Get row count from last statement
      */
     public function rowCount() {
-        return $this->connection->rowCount();
+        if ($this->lastStatement) {
+            return $this->lastStatement->rowCount();
+        }
+        return 0;
     }
 
     /**
