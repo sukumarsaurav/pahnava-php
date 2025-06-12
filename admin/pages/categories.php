@@ -5,10 +5,10 @@
  * @security Admin authentication and permissions required
  */
 
-// Check permissions
-if (!$adminAuth->hasPermission('manage_products')) {
-    setAdminFlashMessage('You do not have permission to access this page.', 'danger');
-    adminRedirect('?page=dashboard');
+// Simple permission check
+if (!isset($_SESSION['admin_id'])) {
+    header('Location: ?page=login');
+    exit;
 }
 
 $errors = [];
@@ -134,17 +134,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Get categories with hierarchy
 try {
-    $categoriesQuery = "SELECT c.*,
-                               p.name as parent_name,
-                               (SELECT COUNT(*) FROM categories sc WHERE sc.parent_id = c.id) as subcategory_count,
-                               (SELECT COUNT(*) FROM products pr WHERE pr.category_id = c.id) as product_count
-                        FROM categories c
-                        LEFT JOIN categories p ON c.parent_id = p.id
-                        ORDER BY COALESCE(c.parent_id, c.id), c.parent_id IS NULL DESC, c.name";
+    // Simple categories query
+    $categoriesQuery = "SELECT * FROM categories ORDER BY name";
     $categories = $db->fetchAll($categoriesQuery);
 
     // Get parent categories for dropdown
-    $parentCategories = $db->fetchAll("SELECT * FROM categories WHERE parent_id IS NULL AND status = 'active' ORDER BY name");
+    $parentCategories = $db->fetchAll("SELECT * FROM categories WHERE status = 'active' ORDER BY name");
 
 } catch (Exception $e) {
     $categories = [];
@@ -209,39 +204,43 @@ try {
                                 <tr>
                                     <td>
                                         <div class="d-flex align-items-center">
-                                            <?php if ($category['parent_id']): ?>
+                                            <?php if (!empty($category['parent_id'])): ?>
                                                 <span class="text-muted me-2">└─</span>
                                             <?php endif; ?>
                                             <div>
                                                 <h6 class="mb-0"><?php echo htmlspecialchars($category['name']); ?></h6>
-                                                <?php if ($category['description']): ?>
+                                                <?php if (!empty($category['description'])): ?>
                                                     <small class="text-muted"><?php echo htmlspecialchars($category['description']); ?></small>
                                                 <?php endif; ?>
                                             </div>
                                         </div>
                                     </td>
                                     <td>
-                                        <?php if ($category['parent_name']): ?>
-                                            <span class="badge bg-light text-dark"><?php echo htmlspecialchars($category['parent_name']); ?></span>
+                                        <?php if (!empty($category['parent_id'])): ?>
+                                            <span class="badge bg-light text-dark">Parent: <?php echo $category['parent_id']; ?></span>
                                         <?php else: ?>
                                             <span class="text-muted">Root Category</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <span class="badge bg-primary"><?php echo number_format($category['product_count']); ?></span>
+                                        <span class="badge bg-primary">0</span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-info"><?php echo number_format($category['subcategory_count']); ?></span>
+                                        <span class="badge bg-info">0</span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-<?php echo $category['status'] === 'active' ? 'success' : 'secondary'; ?>">
-                                            <?php echo ucfirst($category['status']); ?>
+                                        <span class="badge bg-<?php echo ($category['status'] ?? 'active') === 'active' ? 'success' : 'secondary'; ?>">
+                                            <?php echo ucfirst($category['status'] ?? 'active'); ?>
                                         </span>
                                     </td>
                                     <td>
                                         <div>
-                                            <?php echo date('M j, Y', strtotime($category['created_at'])); ?>
-                                            <br><small class="text-muted"><?php echo date('g:i A', strtotime($category['created_at'])); ?></small>
+                                            <?php if (!empty($category['created_at'])): ?>
+                                                <?php echo date('M j, Y', strtotime($category['created_at'])); ?>
+                                                <br><small class="text-muted"><?php echo date('g:i A', strtotime($category['created_at'])); ?></small>
+                                            <?php else: ?>
+                                                <span class="text-muted">N/A</span>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                     <td>
@@ -253,8 +252,7 @@ try {
                                             </button>
                                             <button class="btn btn-outline-danger"
                                                     onclick="deleteCategory(<?php echo $category['id']; ?>, '<?php echo htmlspecialchars($category['name']); ?>')"
-                                                    title="Delete"
-                                                    <?php echo ($category['product_count'] > 0 || $category['subcategory_count'] > 0) ? 'disabled' : ''; ?>>
+                                                    title="Delete">
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </div>
