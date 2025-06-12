@@ -26,7 +26,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $name = Security::sanitizeInput($_POST['name'] ?? '');
                 $description = Security::sanitizeInput($_POST['description'] ?? '');
                 $parentId = (int)($_POST['parent_id'] ?? 0);
-                $status = Security::sanitizeInput($_POST['status'] ?? 'active');
+                $metaTitle = Security::sanitizeInput($_POST['meta_title'] ?? '');
+                $metaDescription = Security::sanitizeInput($_POST['meta_description'] ?? '');
+                $sortOrder = (int)($_POST['sort_order'] ?? 0);
+                $isActive = isset($_POST['is_active']) ? 1 : 0;
 
                 if (empty($name)) {
                     $errors[] = 'Category name is required.';
@@ -43,9 +46,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $slug = generateSlug($name);
 
                             // Insert category
-                            $insertQuery = "INSERT INTO categories (name, slug, description, parent_id, status, created_at, updated_at)
-                                           VALUES (?, ?, ?, ?, ?, NOW(), NOW())";
-                            $db->execute($insertQuery, [$name, $slug, $description, $parentId ?: null, $status]);
+                            $insertQuery = "INSERT INTO categories (name, slug, description, parent_id, meta_title, meta_description, is_active, sort_order, created_at, updated_at)
+                                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())";
+                            $db->execute($insertQuery, [$name, $slug, $description, $parentId ?: null, $metaTitle, $metaDescription, $isActive, $sortOrder]);
 
                             $success = 'Category added successfully!';
                         }
@@ -60,7 +63,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $name = Security::sanitizeInput($_POST['name'] ?? '');
                 $description = Security::sanitizeInput($_POST['description'] ?? '');
                 $parentId = (int)($_POST['parent_id'] ?? 0);
-                $status = Security::sanitizeInput($_POST['status'] ?? 'active');
+                $metaTitle = Security::sanitizeInput($_POST['meta_title'] ?? '');
+                $metaDescription = Security::sanitizeInput($_POST['meta_description'] ?? '');
+                $sortOrder = (int)($_POST['sort_order'] ?? 0);
+                $isActive = isset($_POST['is_active']) ? 1 : 0;
 
                 if (empty($name)) {
                     $errors[] = 'Category name is required.';
@@ -86,9 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 $slug = generateSlug($name);
 
                                 // Update category
-                                $updateQuery = "UPDATE categories SET name = ?, slug = ?, description = ?, parent_id = ?, status = ?, updated_at = NOW()
+                                $updateQuery = "UPDATE categories SET name = ?, slug = ?, description = ?, parent_id = ?, meta_title = ?, meta_description = ?, is_active = ?, sort_order = ?, updated_at = NOW()
                                                WHERE id = ?";
-                                $db->execute($updateQuery, [$name, $slug, $description, $parentId ?: null, $status, $categoryId]);
+                                $db->execute($updateQuery, [$name, $slug, $description, $parentId ?: null, $metaTitle, $metaDescription, $isActive, $sortOrder, $categoryId]);
 
                                 $success = 'Category updated successfully!';
                             }
@@ -323,11 +329,30 @@ try {
                     </div>
 
                     <div class="mb-3">
-                        <label for="status" class="form-label">Status</label>
-                        <select class="form-select" id="status" name="status">
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                        </select>
+                        <label for="meta_title" class="form-label">Meta Title</label>
+                        <input type="text" class="form-control" id="meta_title" name="meta_title">
+                        <small class="form-text text-muted">SEO meta title for this category</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="meta_description" class="form-label">Meta Description</label>
+                        <textarea class="form-control" id="meta_description" name="meta_description" rows="2"></textarea>
+                        <small class="form-text text-muted">SEO meta description for this category</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="sort_order" class="form-label">Sort Order</label>
+                        <input type="number" class="form-control" id="sort_order" name="sort_order" value="0" min="0">
+                        <small class="form-text text-muted">Lower numbers appear first</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                            <label class="form-check-label" for="is_active">
+                                Active
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -374,11 +399,30 @@ try {
                     </div>
 
                     <div class="mb-3">
-                        <label for="edit_status" class="form-label">Status</label>
-                        <select class="form-select" id="edit_status" name="status">
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                        </select>
+                        <label for="edit_meta_title" class="form-label">Meta Title</label>
+                        <input type="text" class="form-control" id="edit_meta_title" name="meta_title">
+                        <small class="form-text text-muted">SEO meta title for this category</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="edit_meta_description" class="form-label">Meta Description</label>
+                        <textarea class="form-control" id="edit_meta_description" name="meta_description" rows="2"></textarea>
+                        <small class="form-text text-muted">SEO meta description for this category</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="edit_sort_order" class="form-label">Sort Order</label>
+                        <input type="number" class="form-control" id="edit_sort_order" name="sort_order" value="0" min="0">
+                        <small class="form-text text-muted">Lower numbers appear first</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="edit_is_active" name="is_active">
+                            <label class="form-check-label" for="edit_is_active">
+                                Active
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -401,7 +445,10 @@ function editCategory(categoryId) {
         document.getElementById('edit_name').value = category.name;
         document.getElementById('edit_description').value = category.description || '';
         document.getElementById('edit_parent_id').value = category.parent_id || '';
-        document.getElementById('edit_status').value = category.status;
+        document.getElementById('edit_meta_title').value = category.meta_title || '';
+        document.getElementById('edit_meta_description').value = category.meta_description || '';
+        document.getElementById('edit_sort_order').value = category.sort_order || 0;
+        document.getElementById('edit_is_active').checked = category.is_active == 1;
 
         const modal = new bootstrap.Modal(document.getElementById('editCategoryModal'));
         modal.show();

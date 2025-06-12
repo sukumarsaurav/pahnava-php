@@ -5,20 +5,23 @@
  * @security Admin authentication and permissions required
  */
 
-// Check permissions
-if (!$adminAuth->hasPermission('manage_customers')) {
-    setAdminFlashMessage('You do not have permission to access this page.', 'danger');
-    redirect('admin/');
+// Simple permission check
+if (!isset($_SESSION['admin_id'])) {
+    header('Location: ?page=login');
+    exit;
 }
 
+$errors = [];
+$success = '';
+
 // Get filters
-$search = Security::sanitizeInput($_GET['search'] ?? '');
-$status = Security::sanitizeInput($_GET['status'] ?? '');
-$dateFrom = Security::sanitizeInput($_GET['date_from'] ?? '');
-$dateTo = Security::sanitizeInput($_GET['date_to'] ?? '');
-$sort = Security::sanitizeInput($_GET['sort'] ?? 'created_at');
-$order = Security::sanitizeInput($_GET['order'] ?? 'desc');
-$page = (int)($_GET['page'] ?? 1);
+$search = $_GET['search'] ?? '';
+$status = $_GET['status'] ?? '';
+$dateFrom = $_GET['date_from'] ?? '';
+$dateTo = $_GET['date_to'] ?? '';
+$sort = $_GET['sort'] ?? 'created_at';
+$order = $_GET['order'] ?? 'desc';
+$page = (int)($_GET['page_num'] ?? 1);
 $perPage = 20;
 
 // Build query conditions
@@ -36,13 +39,15 @@ if (!empty($search)) {
 
 if (!empty($status)) {
     if ($status === 'active') {
-        $conditions[] = "u.is_active = 1";
+        $conditions[] = "u.status = 'active'";
     } elseif ($status === 'inactive') {
-        $conditions[] = "u.is_active = 0";
+        $conditions[] = "u.status = 'inactive'";
+    } elseif ($status === 'suspended') {
+        $conditions[] = "u.status = 'suspended'";
     } elseif ($status === 'verified') {
-        $conditions[] = "u.is_verified = 1";
+        $conditions[] = "u.email_verified = 1";
     } elseif ($status === 'unverified') {
-        $conditions[] = "u.is_verified = 0";
+        $conditions[] = "u.email_verified = 0";
     }
 }
 
@@ -58,37 +63,46 @@ if (!empty($dateTo)) {
 
 $whereClause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
 
-// Get total count
-$countQuery = "SELECT COUNT(*) as total FROM users u $whereClause";
-$totalResult = $db->fetchRow($countQuery, $params);
-$totalCustomers = $totalResult['total'];
-$totalPages = ceil($totalCustomers / $perPage);
+try {
+    // Get total count
+    $countQuery = "SELECT COUNT(*) as total FROM users u $whereClause";
+    $totalResult = $db->fetchRow($countQuery, $params);
+    $totalCustomers = $totalResult['total'] ?? 0;
+    $totalPages = ceil($totalCustomers / $perPage);
 
-// Get customers
-$offset = ($page - 1) * $perPage;
-$allowedSorts = ['first_name', 'last_name', 'email', 'created_at', 'last_login'];
-$sortColumn = in_array($sort, $allowedSorts) ? $sort : 'created_at';
-$sortOrder = $order === 'asc' ? 'ASC' : 'DESC';
+    // Get customers
+    $offset = ($page - 1) * $perPage;
+    $allowedSorts = ['first_name', 'last_name', 'email', 'created_at'];
+    $sortColumn = in_array($sort, $allowedSorts) ? $sort : 'created_at';
+    $sortOrder = $order === 'asc' ? 'ASC' : 'DESC';
 
-$customersQuery = "SELECT u.*,
-                          (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) as total_orders,
-                          (SELECT SUM(o.total_amount) FROM orders o WHERE o.user_id = u.id) as total_spent,
-                          (SELECT MAX(o.created_at) FROM orders o WHERE o.user_id = u.id) as last_order_date
-                   FROM users u
-                   $whereClause
-                   ORDER BY u.$sortColumn $sortOrder
-                   LIMIT $perPage OFFSET $offset";
+    $customersQuery = "SELECT u.*,
+                              (SELECT COUNT(*) FROM orders o WHERE o.user_id = u.id) as total_orders,
+                              (SELECT SUM(o.total_amount) FROM orders o WHERE o.user_id = u.id) as total_spent,
+                              (SELECT MAX(o.created_at) FROM orders o WHERE o.user_id = u.id) as last_order_date
+                       FROM users u
+                       $whereClause
+                       ORDER BY u.$sortColumn $sortOrder
+                       LIMIT $perPage OFFSET $offset";
 
-$customers = $db->fetchAll($customersQuery, $params);
+    $customers = $db->fetchAll($customersQuery, $params);
 
-// Get customer statistics
-$statsQuery = "SELECT 
-                   COUNT(*) as total_customers,
-                   SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) as active_customers,
-                   SUM(CASE WHEN is_verified = 1 THEN 1 ELSE 0 END) as verified_customers,
-                   SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as new_today
-                FROM users";
-$stats = $db->fetchRow($statsQuery);
+    // Get customer statistics
+    $statsQuery = "SELECT
+                       COUNT(*) as total_customers,
+                       SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_customers,
+                       SUM(CASE WHEN email_verified = 1 THEN 1 ELSE 0 END) as verified_customers,
+                       SUM(CASE WHEN DATE(created_at) = CURDATE() THEN 1 ELSE 0 END) as new_today
+                    FROM users";
+    $stats = $db->fetchRow($statsQuery);
+
+} catch (Exception $e) {
+    $customers = [];
+    $totalCustomers = 0;
+    $totalPages = 0;
+    $stats = ['total_customers' => 0, 'active_customers' => 0, 'verified_customers' => 0, 'new_today' => 0];
+    $errors[] = 'Error loading customers: ' . $e->getMessage();
+}
 ?>
 
 <div class="container-fluid">
@@ -183,8 +197,9 @@ $stats = $db->fetchRow($statsQuery);
                         <option value="">All Status</option>
                         <option value="active" <?php echo $status === 'active' ? 'selected' : ''; ?>>Active</option>
                         <option value="inactive" <?php echo $status === 'inactive' ? 'selected' : ''; ?>>Inactive</option>
-                        <option value="verified" <?php echo $status === 'verified' ? 'selected' : ''; ?>>Verified</option>
-                        <option value="unverified" <?php echo $status === 'unverified' ? 'selected' : ''; ?>>Unverified</option>
+                        <option value="suspended" <?php echo $status === 'suspended' ? 'selected' : ''; ?>>Suspended</option>
+                        <option value="verified" <?php echo $status === 'verified' ? 'selected' : ''; ?>>Email Verified</option>
+                        <option value="unverified" <?php echo $status === 'unverified' ? 'selected' : ''; ?>>Email Unverified</option>
                     </select>
                 </div>
                 
@@ -289,17 +304,25 @@ $stats = $db->fetchRow($statsQuery);
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <strong><?php echo formatAdminCurrency($customer['total_spent'] ?? 0); ?></strong>
+                                        <strong>₹<?php echo number_format($customer['total_spent'] ?? 0, 2); ?></strong>
                                     </td>
                                     <td>
                                         <div>
-                                            <span class="badge bg-<?php echo $customer['is_active'] ? 'success' : 'secondary'; ?>">
-                                                <?php echo $customer['is_active'] ? 'Active' : 'Inactive'; ?>
+                                            <?php
+                                            $statusColors = [
+                                                'active' => 'success',
+                                                'inactive' => 'secondary',
+                                                'suspended' => 'danger'
+                                            ];
+                                            $statusColor = $statusColors[$customer['status']] ?? 'secondary';
+                                            ?>
+                                            <span class="badge bg-<?php echo $statusColor; ?>">
+                                                <?php echo ucfirst($customer['status']); ?>
                                             </span>
-                                            <?php if ($customer['is_verified']): ?>
-                                                <br><span class="badge bg-info">Verified</span>
+                                            <?php if ($customer['email_verified']): ?>
+                                                <br><span class="badge bg-info">Email Verified</span>
                                             <?php else: ?>
-                                                <br><span class="badge bg-warning">Unverified</span>
+                                                <br><span class="badge bg-warning">Email Unverified</span>
                                             <?php endif; ?>
                                         </div>
                                     </td>
@@ -365,7 +388,25 @@ $stats = $db->fetchRow($statsQuery);
                         if ($sort !== 'created_at') $baseUrl .= "&sort=" . urlencode($sort);
                         if ($order !== 'desc') $baseUrl .= "&order=" . urlencode($order);
                         
-                        echo generateAdminPagination($page, $totalPages, $baseUrl);
+                        // Simple pagination
+                        echo '<nav aria-label="Customers pagination">';
+                        echo '<ul class="pagination justify-content-center mb-0">';
+
+                        if ($page > 1) {
+                            echo '<li class="page-item"><a class="page-link" href="' . $baseUrl . '&page_num=' . ($page - 1) . '">Previous</a></li>';
+                        }
+
+                        for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++) {
+                            $active = $i === $page ? 'active' : '';
+                            echo '<li class="page-item ' . $active . '"><a class="page-link" href="' . $baseUrl . '&page_num=' . $i . '">' . $i . '</a></li>';
+                        }
+
+                        if ($page < $totalPages) {
+                            echo '<li class="page-item"><a class="page-link" href="' . $baseUrl . '&page_num=' . ($page + 1) . '">Next</a></li>';
+                        }
+
+                        echo '</ul>';
+                        echo '</nav>';
                         ?>
                     </div>
                 <?php endif; ?>
@@ -422,42 +463,7 @@ $stats = $db->fetchRow($statsQuery);
 
 <script>
 function viewCustomerDetails(customerId) {
-    const modal = new bootstrap.Modal(document.getElementById('customerDetailsModal'));
-    const content = document.getElementById('customerDetailsContent');
-    
-    // Show loading
-    content.innerHTML = `
-        <div class="text-center py-4">
-            <div class="spinner-border" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-        </div>
-    `;
-    
-    modal.show();
-    
-    // Load customer details
-    makeAjaxRequest(`ajax/get-customer-details.php?id=${customerId}`, {
-        method: 'GET'
-    })
-    .then(data => {
-        if (data.success) {
-            content.innerHTML = data.html;
-        } else {
-            content.innerHTML = `
-                <div class="alert alert-danger">
-                    Failed to load customer details: ${data.message || 'Unknown error'}
-                </div>
-            `;
-        }
-    })
-    .catch(error => {
-        content.innerHTML = `
-            <div class="alert alert-danger">
-                Failed to load customer details. Please try again.
-            </div>
-        `;
-    });
+    alert('Customer details view will be implemented soon. Customer ID: ' + customerId);
 }
 
 function toggleCustomerStatus(customerId, newStatus) {
@@ -485,8 +491,7 @@ function toggleCustomerStatus(customerId, newStatus) {
 }
 
 function sendCustomerEmail(customerId) {
-    // Implement email sending functionality
-    showNotification('Email functionality will be implemented', 'info');
+    alert('Email functionality will be implemented soon. Customer ID: ' + customerId);
 }
 
 function resetCustomerPassword(customerId) {
