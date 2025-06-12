@@ -5,41 +5,13 @@
  * @security Rate limiting, CSRF protection, and secure authentication
  */
 
-$errors = [];
+// Get login errors from session (if any)
+$errors = $_SESSION['login_errors'] ?? [];
 $success = '';
 
-// Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Verify CSRF token
-    if (!Security::verifyCSRFToken($_POST['csrf_token'] ?? '')) {
-        $errors[] = 'Invalid request. Please try again.';
-    } else {
-        // Sanitize input
-        $username = Security::sanitizeInput($_POST['username'] ?? '');
-        $password = $_POST['password'] ?? '';
-        $rememberMe = isset($_POST['remember_me']);
-        
-        // Validate input
-        if (empty($username)) {
-            $errors[] = 'Username is required.';
-        }
-        
-        if (empty($password)) {
-            $errors[] = 'Password is required.';
-        }
-        
-        // Attempt login if no validation errors
-        if (empty($errors)) {
-            $loginResult = $adminAuth->login($username, $password, $rememberMe);
-            
-            if ($loginResult['success']) {
-                // Redirect to dashboard
-                redirect('admin/');
-            } else {
-                $errors[] = $loginResult['error'];
-            }
-        }
-    }
+// Clear login errors from session
+if (isset($_SESSION['login_errors'])) {
+    unset($_SESSION['login_errors']);
 }
 ?>
 

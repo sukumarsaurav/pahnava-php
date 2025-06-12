@@ -48,6 +48,47 @@ try {
     adminRedirect('index-safe.php');
 }
 
+// Handle login form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['username'])) {
+    $errors = [];
+
+    // Verify CSRF token
+    if (!Security::verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+        $errors[] = 'Invalid request. Please try again.';
+    } else {
+        // Sanitize input
+        $username = Security::sanitizeInput($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+        $rememberMe = isset($_POST['remember_me']);
+
+        // Validate input
+        if (empty($username)) {
+            $errors[] = 'Username is required.';
+        }
+
+        if (empty($password)) {
+            $errors[] = 'Password is required.';
+        }
+
+        // Attempt login if no validation errors
+        if (empty($errors)) {
+            $loginResult = $adminAuth->login($username, $password, $rememberMe);
+
+            if ($loginResult['success']) {
+                // Redirect to dashboard
+                adminRedirect('?page=dashboard');
+            } else {
+                $errors[] = $loginResult['error'];
+            }
+        }
+    }
+
+    // Store errors in session for display
+    if (!empty($errors)) {
+        $_SESSION['login_errors'] = $errors;
+    }
+}
+
 // Get current page
 $page = Security::sanitizeInput($_GET['page'] ?? 'dashboard');
 
