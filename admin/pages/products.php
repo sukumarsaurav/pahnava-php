@@ -22,21 +22,23 @@ $conditions = [];
 $params = [];
 
 if (!empty($search)) {
-    $conditions[] = "(name LIKE ? OR sku LIKE ?)";
+    $conditions[] = "(p.name LIKE ? OR p.sku LIKE ?)";
     $params[] = "%$search%";
     $params[] = "%$search%";
 }
 
 if ($category > 0) {
-    $conditions[] = "category_id = ?";
+    $conditions[] = "p.category_id = ?";
     $params[] = $category;
 }
 
 if (!empty($status)) {
     if ($status === 'active') {
-        $conditions[] = "status = 'active'";
+        $conditions[] = "p.is_active = 1";
     } elseif ($status === 'inactive') {
-        $conditions[] = "status = 'inactive'";
+        $conditions[] = "p.is_active = 0";
+    } elseif ($status === 'low_stock') {
+        $conditions[] = "p.inventory_quantity <= p.low_stock_threshold";
     }
 }
 
@@ -44,26 +46,34 @@ $whereClause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : 
 
 try {
     // Get total count
-    $countQuery = "SELECT COUNT(*) as total FROM products $whereClause";
+    $countQuery = "SELECT COUNT(*) as total FROM products p $whereClause";
     $totalResult = $db->fetchRow($countQuery, $params);
     $totalProducts = $totalResult['total'] ?? 0;
     $totalPages = ceil($totalProducts / $perPage);
 
-    // Get products
+    // Get products with category and brand info
     $offset = ($page - 1) * $perPage;
-    $allowedSorts = ['name', 'sku', 'price', 'stock_quantity', 'id'];
-    $sortColumn = in_array($sort, $allowedSorts) ? $sort : 'id';
+    $allowedSorts = ['name', 'sku', 'price', 'inventory_quantity', 'created_at'];
+    $sortColumn = in_array($sort, $allowedSorts) ? $sort : 'created_at';
     $sortOrder = $order === 'asc' ? 'ASC' : 'DESC';
 
-    $productsQuery = "SELECT * FROM products
+    $productsQuery = "SELECT p.*,
+                             c.name as category_name,
+                             b.name as brand_name,
+                             pi.image_url as primary_image,
+                             (SELECT COUNT(*) FROM order_items oi WHERE oi.product_id = p.id) as total_sold
+                      FROM products p
+                      LEFT JOIN categories c ON p.category_id = c.id
+                      LEFT JOIN brands b ON p.brand_id = b.id
+                      LEFT JOIN product_images pi ON p.id = pi.product_id AND pi.is_primary = 1
                       $whereClause
-                      ORDER BY $sortColumn $sortOrder
+                      ORDER BY p.$sortColumn $sortOrder
                       LIMIT $perPage OFFSET $offset";
 
     $products = $db->fetchAll($productsQuery, $params);
 
     // Get categories for filter
-    $categories = $db->fetchAll("SELECT * FROM categories WHERE status = 'active' ORDER BY name");
+    $categories = $db->fetchAll("SELECT * FROM categories WHERE is_active = 1 ORDER BY name");
 
 } catch (Exception $e) {
     $products = [];
@@ -212,8 +222,8 @@ try {
                                                name="selected_items[]" value="<?php echo $product['id']; ?>">
                                     </td>
                                     <td>
-                                        <?php if (!empty($product['image'])): ?>
-                                            <img src="<?php echo htmlspecialchars($product['image']); ?>"
+                                        <?php if (!empty($product['primary_image'])): ?>
+                                            <img src="<?php echo htmlspecialchars($product['primary_image']); ?>"
                                                  alt="<?php echo htmlspecialchars($product['name']); ?>"
                                                  class="rounded" style="width: 50px; height: 50px; object-fit: cover;">
                                         <?php else: ?>
@@ -226,36 +236,51 @@ try {
                                     <td>
                                         <div>
                                             <h6 class="mb-0"><?php echo htmlspecialchars($product['name']); ?></h6>
-                                            <small class="text-muted">SKU: <?php echo htmlspecialchars($product['sku'] ?? 'N/A'); ?></small>
+                                            <small class="text-muted">SKU: <?php echo htmlspecialchars($product['sku']); ?></small>
+                                            <?php if ($product['is_featured']): ?>
+                                                <br><span class="badge bg-warning text-dark">Featured</span>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                     <td>
-                                        <?php if (!empty($product['category_id'])): ?>
-                                            <span class="badge bg-light text-dark">Category <?php echo $product['category_id']; ?></span>
+                                        <?php if (!empty($product['category_name'])): ?>
+                                            <span class="badge bg-light text-dark"><?php echo htmlspecialchars($product['category_name']); ?></span>
                                         <?php else: ?>
                                             <span class="text-muted">No Category</span>
                                         <?php endif; ?>
+                                        <?php if (!empty($product['brand_name'])): ?>
+                                            <br><small class="text-muted"><?php echo htmlspecialchars($product['brand_name']); ?></small>
+                                        <?php endif; ?>
                                     </td>
-                                    <td>₹<?php echo number_format($product['price'] ?? 0, 2); ?></td>
+                                    <td>
+                                        <strong>₹<?php echo number_format($product['price'], 2); ?></strong>
+                                        <?php if (!empty($product['compare_price']) && $product['compare_price'] > $product['price']): ?>
+                                            <br><small class="text-muted text-decoration-line-through">₹<?php echo number_format($product['compare_price'], 2); ?></small>
+                                        <?php endif; ?>
+                                    </td>
                                     <td>
                                         <?php
-                                        $stock = $product['stock_quantity'] ?? 0;
-                                        $stockClass = $stock <= 10 ? 'text-danger' : 'text-success';
+                                        $stock = $product['inventory_quantity'];
+                                        $threshold = $product['low_stock_threshold'];
+                                        $stockClass = $stock <= $threshold ? 'text-danger' : ($stock <= ($threshold * 2) ? 'text-warning' : 'text-success');
                                         ?>
                                         <span class="<?php echo $stockClass; ?>">
                                             <?php echo number_format($stock); ?>
                                         </span>
-                                        <?php if ($stock <= 10): ?>
-                                            <i class="fas fa-exclamation-triangle text-warning ms-1" title="Low Stock"></i>
+                                        <?php if ($stock <= $threshold): ?>
+                                            <i class="fas fa-exclamation-triangle text-danger ms-1" title="Low Stock Alert"></i>
+                                        <?php endif; ?>
+                                        <?php if (!$product['track_inventory']): ?>
+                                            <br><small class="text-muted">Not tracked</small>
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <span class="badge bg-<?php echo ($product['status'] ?? 'inactive') === 'active' ? 'success' : 'secondary'; ?>">
-                                            <?php echo ucfirst($product['status'] ?? 'inactive'); ?>
+                                        <span class="badge bg-<?php echo $product['is_active'] ? 'success' : 'secondary'; ?>">
+                                            <?php echo $product['is_active'] ? 'Active' : 'Inactive'; ?>
                                         </span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-info">0</span>
+                                        <span class="badge bg-info"><?php echo number_format($product['total_sold'] ?? 0); ?></span>
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">

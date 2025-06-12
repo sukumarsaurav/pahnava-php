@@ -134,12 +134,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // Get categories with hierarchy
 try {
-    // Simple categories query
-    $categoriesQuery = "SELECT * FROM categories ORDER BY name";
+    // Get categories with parent info and product counts
+    $categoriesQuery = "SELECT c.*,
+                               p.name as parent_name,
+                               (SELECT COUNT(*) FROM categories sc WHERE sc.parent_id = c.id) as subcategory_count,
+                               (SELECT COUNT(*) FROM products pr WHERE pr.category_id = c.id AND pr.is_active = 1) as product_count
+                        FROM categories c
+                        LEFT JOIN categories p ON c.parent_id = p.id
+                        ORDER BY COALESCE(c.parent_id, c.id), c.parent_id IS NULL DESC, c.sort_order, c.name";
     $categories = $db->fetchAll($categoriesQuery);
 
     // Get parent categories for dropdown
-    $parentCategories = $db->fetchAll("SELECT * FROM categories WHERE status = 'active' ORDER BY name");
+    $parentCategories = $db->fetchAll("SELECT * FROM categories WHERE parent_id IS NULL AND is_active = 1 ORDER BY sort_order, name");
 
 } catch (Exception $e) {
     $categories = [];
@@ -212,26 +218,32 @@ try {
                                                 <?php if (!empty($category['description'])): ?>
                                                     <small class="text-muted"><?php echo htmlspecialchars($category['description']); ?></small>
                                                 <?php endif; ?>
+                                                <?php if (!empty($category['slug'])): ?>
+                                                    <br><code class="small"><?php echo htmlspecialchars($category['slug']); ?></code>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
                                     </td>
                                     <td>
-                                        <?php if (!empty($category['parent_id'])): ?>
-                                            <span class="badge bg-light text-dark">Parent: <?php echo $category['parent_id']; ?></span>
+                                        <?php if (!empty($category['parent_name'])): ?>
+                                            <span class="badge bg-light text-dark"><?php echo htmlspecialchars($category['parent_name']); ?></span>
                                         <?php else: ?>
                                             <span class="text-muted">Root Category</span>
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <span class="badge bg-primary">0</span>
+                                        <span class="badge bg-primary"><?php echo number_format($category['product_count']); ?></span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-info">0</span>
+                                        <span class="badge bg-info"><?php echo number_format($category['subcategory_count']); ?></span>
                                     </td>
                                     <td>
-                                        <span class="badge bg-<?php echo ($category['status'] ?? 'active') === 'active' ? 'success' : 'secondary'; ?>">
-                                            <?php echo ucfirst($category['status'] ?? 'active'); ?>
+                                        <span class="badge bg-<?php echo $category['is_active'] ? 'success' : 'secondary'; ?>">
+                                            <?php echo $category['is_active'] ? 'Active' : 'Inactive'; ?>
                                         </span>
+                                        <?php if (!empty($category['sort_order'])): ?>
+                                            <br><small class="text-muted">Order: <?php echo $category['sort_order']; ?></small>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <div>
@@ -252,7 +264,8 @@ try {
                                             </button>
                                             <button class="btn btn-outline-danger"
                                                     onclick="deleteCategory(<?php echo $category['id']; ?>, '<?php echo htmlspecialchars($category['name']); ?>')"
-                                                    title="Delete">
+                                                    title="Delete"
+                                                    <?php echo ($category['product_count'] > 0 || $category['subcategory_count'] > 0) ? 'disabled' : ''; ?>>
                                                 <i class="fas fa-trash"></i>
                                             </button>
                                         </div>

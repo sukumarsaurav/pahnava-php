@@ -29,25 +29,26 @@ $conditions = [];
 $params = [];
 
 if (!empty($search)) {
-    $conditions[] = "(id LIKE ? OR customer_name LIKE ? OR customer_email LIKE ?)";
+    $conditions[] = "(o.order_number LIKE ? OR o.billing_first_name LIKE ? OR o.billing_last_name LIKE ? OR u.email LIKE ?)";
     $searchTerm = "%$search%";
+    $params[] = $searchTerm;
     $params[] = $searchTerm;
     $params[] = $searchTerm;
     $params[] = $searchTerm;
 }
 
 if (!empty($status)) {
-    $conditions[] = "status = ?";
+    $conditions[] = "o.status = ?";
     $params[] = $status;
 }
 
 if (!empty($dateFrom)) {
-    $conditions[] = "DATE(created_at) >= ?";
+    $conditions[] = "DATE(o.created_at) >= ?";
     $params[] = $dateFrom;
 }
 
 if (!empty($dateTo)) {
-    $conditions[] = "DATE(created_at) <= ?";
+    $conditions[] = "DATE(o.created_at) <= ?";
     $params[] = $dateTo;
 }
 
@@ -55,20 +56,24 @@ $whereClause = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : 
 
 try {
     // Get total count
-    $countQuery = "SELECT COUNT(*) as total FROM orders $whereClause";
+    $countQuery = "SELECT COUNT(*) as total FROM orders o LEFT JOIN users u ON o.user_id = u.id $whereClause";
     $totalResult = $db->fetchRow($countQuery, $params);
     $totalOrders = $totalResult['total'] ?? 0;
     $totalPages = ceil($totalOrders / $perPage);
 
-    // Get orders
+    // Get orders with user info and item counts
     $offset = ($page - 1) * $perPage;
-    $allowedSorts = ['id', 'total_amount', 'status', 'created_at'];
-    $sortColumn = in_array($sort, $allowedSorts) ? $sort : 'id';
+    $allowedSorts = ['order_number', 'total_amount', 'status', 'created_at'];
+    $sortColumn = in_array($sort, $allowedSorts) ? $sort : 'created_at';
     $sortOrder = $order === 'asc' ? 'ASC' : 'DESC';
 
-    $ordersQuery = "SELECT * FROM orders
+    $ordersQuery = "SELECT o.*,
+                           u.first_name, u.last_name, u.email,
+                           (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) as item_count
+                    FROM orders o
+                    LEFT JOIN users u ON o.user_id = u.id
                     $whereClause
-                    ORDER BY $sortColumn $sortOrder
+                    ORDER BY o.$sortColumn $sortOrder
                     LIMIT $perPage OFFSET $offset";
 
     $orders = $db->fetchAll($ordersQuery, $params);
@@ -266,16 +271,29 @@ try {
                                         </div>
                                     </td>
                                     <td>
-                                        <div>
-                                            <?php echo htmlspecialchars($order['customer_name'] ?? 'Guest Customer'); ?>
-                                            <br><small class="text-muted"><?php echo htmlspecialchars($order['customer_email'] ?? 'N/A'); ?></small>
-                                        </div>
+                                        <?php if (!empty($order['first_name']) || !empty($order['billing_first_name'])): ?>
+                                            <div>
+                                                <?php
+                                                $customerName = trim(($order['first_name'] ?? $order['billing_first_name']) . ' ' . ($order['last_name'] ?? $order['billing_last_name']));
+                                                echo htmlspecialchars($customerName ?: 'Guest Customer');
+                                                ?>
+                                                <br><small class="text-muted"><?php echo htmlspecialchars($order['email'] ?? 'N/A'); ?></small>
+                                            </div>
+                                        <?php else: ?>
+                                            <span class="text-muted">Guest Customer</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
-                                        <span class="badge bg-light text-dark">1 item</span>
+                                        <span class="badge bg-light text-dark"><?php echo number_format($order['item_count'] ?? 0); ?> items</span>
                                     </td>
                                     <td>
-                                        <strong>₹<?php echo number_format($order['total_amount'] ?? 0, 2); ?></strong>
+                                        <strong>₹<?php echo number_format($order['total_amount'], 2); ?></strong>
+                                        <?php if (!empty($order['discount_amount']) && $order['discount_amount'] > 0): ?>
+                                            <br><small class="text-success">-₹<?php echo number_format($order['discount_amount'], 2); ?> discount</small>
+                                        <?php endif; ?>
+                                        <?php if (!empty($order['coupon_code'])): ?>
+                                            <br><small class="text-info">Coupon: <?php echo htmlspecialchars($order['coupon_code']); ?></small>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <?php

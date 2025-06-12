@@ -34,13 +34,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     try {
                         // Get current stock
-                        $currentStock = $db->fetchRow("SELECT stock_quantity, name FROM products WHERE id = ?", [$productId]);
+                        $currentStock = $db->fetchRow("SELECT inventory_quantity, name FROM products WHERE id = ?", [$productId]);
 
                         if (!$currentStock) {
                             $errors[] = 'Product not found.';
                         } else {
                             // Update stock
-                            $db->execute("UPDATE products SET stock_quantity = ?, updated_at = NOW() WHERE id = ?", [$newStock, $productId]);
+                            $db->execute("UPDATE products SET inventory_quantity = ?, updated_at = NOW() WHERE id = ?", [$newStock, $productId]);
 
                             $success = 'Stock updated successfully for ' . htmlspecialchars($currentStock['name']);
                         }
@@ -57,13 +57,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $search = Security::sanitizeInput($_GET['search'] ?? '');
 $category = (int)($_GET['category'] ?? 0);
 $stockStatus = Security::sanitizeInput($_GET['stock_status'] ?? '');
-$sort = Security::sanitizeInput($_GET['sort'] ?? 'stock_quantity');
+$sort = Security::sanitizeInput($_GET['sort'] ?? 'inventory_quantity');
 $order = Security::sanitizeInput($_GET['order'] ?? 'asc');
 $page = (int)($_GET['page_num'] ?? 1);
 $perPage = 20;
 
 // Build query conditions
-$conditions = ["p.status != 'deleted'"];
+$conditions = ["p.is_active = 1"];
 $params = [];
 
 if (!empty($search)) {
@@ -81,13 +81,13 @@ if ($category > 0) {
 if (!empty($stockStatus)) {
     switch ($stockStatus) {
         case 'low':
-            $conditions[] = "p.stock_quantity <= 10";
+            $conditions[] = "p.inventory_quantity <= p.low_stock_threshold";
             break;
         case 'out':
-            $conditions[] = "p.stock_quantity = 0";
+            $conditions[] = "p.inventory_quantity = 0";
             break;
         case 'in_stock':
-            $conditions[] = "p.stock_quantity > 10";
+            $conditions[] = "p.inventory_quantity > p.low_stock_threshold";
             break;
     }
 }
@@ -100,31 +100,34 @@ try {
     $totalProducts = $db->fetchRow($countQuery, $params)['total'];
     $totalPages = ceil($totalProducts / $perPage);
 
-    // Get products
+    // Get products with category and image info
     $offset = ($page - 1) * $perPage;
-    $allowedSorts = ['name', 'sku', 'stock_quantity', 'created_at'];
-    $sortColumn = in_array($sort, $allowedSorts) ? $sort : 'stock_quantity';
+    $allowedSorts = ['name', 'sku', 'inventory_quantity', 'created_at'];
+    $sortColumn = in_array($sort, $allowedSorts) ? $sort : 'inventory_quantity';
     $sortOrder = $order === 'desc' ? 'DESC' : 'ASC';
 
-    $productsQuery = "SELECT p.*, c.name as category_name
+    $productsQuery = "SELECT p.*,
+                             c.name as category_name,
+                             pi.image_url as primary_image
                       FROM products p
                       LEFT JOIN categories c ON p.category_id = c.id
+                      LEFT JOIN product_images pi ON p.id = pi.product_id AND pi.is_primary = 1
                       WHERE $whereClause
                       ORDER BY p.$sortColumn $sortOrder
                       LIMIT $perPage OFFSET $offset";
     $products = $db->fetchAll($productsQuery, $params);
 
     // Get categories for filter
-    $categories = $db->fetchAll("SELECT * FROM categories WHERE status = 'active' ORDER BY name");
+    $categories = $db->fetchAll("SELECT * FROM categories WHERE is_active = 1 ORDER BY name");
 
     // Get inventory statistics
     $statsQuery = "SELECT
                        COUNT(*) as total_products,
-                       SUM(CASE WHEN stock_quantity = 0 THEN 1 ELSE 0 END) as out_of_stock,
-                       SUM(CASE WHEN stock_quantity <= 10 AND stock_quantity > 0 THEN 1 ELSE 0 END) as low_stock,
-                       SUM(stock_quantity) as total_stock_value
+                       SUM(CASE WHEN inventory_quantity = 0 THEN 1 ELSE 0 END) as out_of_stock,
+                       SUM(CASE WHEN inventory_quantity <= low_stock_threshold AND inventory_quantity > 0 THEN 1 ELSE 0 END) as low_stock,
+                       SUM(inventory_quantity) as total_stock_value
                    FROM products
-                   WHERE status = 'active'";
+                   WHERE is_active = 1";
     $stats = $db->fetchRow($statsQuery);
 
 } catch (Exception $e) {
@@ -265,7 +268,7 @@ try {
                 <div class="col-md-2">
                     <label class="form-label">Sort By</label>
                     <select class="form-select" name="sort">
-                        <option value="stock_quantity" <?php echo $sort === 'stock_quantity' ? 'selected' : ''; ?>>Stock Level</option>
+                        <option value="inventory_quantity" <?php echo $sort === 'inventory_quantity' ? 'selected' : ''; ?>>Stock Level</option>
                         <option value="name" <?php echo $sort === 'name' ? 'selected' : ''; ?>>Product Name</option>
                         <option value="sku" <?php echo $sort === 'sku' ? 'selected' : ''; ?>>SKU</option>
                         <option value="created_at" <?php echo $sort === 'created_at' ? 'selected' : ''; ?>>Date Added</option>
@@ -330,8 +333,8 @@ try {
                                 <tr data-product-id="<?php echo $product['id']; ?>">
                                     <td>
                                         <div class="d-flex align-items-center">
-                                            <?php if ($product['image']): ?>
-                                                <img src="<?php echo htmlspecialchars($product['image']); ?>"
+                                            <?php if (!empty($product['primary_image'])): ?>
+                                                <img src="<?php echo htmlspecialchars($product['primary_image']); ?>"
                                                      alt="Product" class="product-thumb me-3">
                                             <?php else: ?>
                                                 <div class="product-thumb-placeholder me-3">
@@ -341,11 +344,17 @@ try {
                                             <div>
                                                 <h6 class="mb-0"><?php echo htmlspecialchars($product['name']); ?></h6>
                                                 <small class="text-muted">ID: <?php echo $product['id']; ?></small>
+                                                <?php if ($product['is_featured']): ?>
+                                                    <br><span class="badge bg-warning text-dark">Featured</span>
+                                                <?php endif; ?>
                                             </div>
                                         </div>
                                     </td>
                                     <td>
                                         <code><?php echo htmlspecialchars($product['sku']); ?></code>
+                                        <?php if (!$product['track_inventory']): ?>
+                                            <br><small class="text-muted">Not tracked</small>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <?php if ($product['category_name']): ?>
@@ -357,27 +366,32 @@ try {
                                     <td>
                                         <div class="stock-display">
                                             <?php
+                                            $stock = $product['inventory_quantity'];
+                                            $threshold = $product['low_stock_threshold'];
                                             $stockClass = 'success';
-                                            if ($product['stock_quantity'] == 0) {
+                                            if ($stock == 0) {
                                                 $stockClass = 'danger';
-                                            } elseif ($product['stock_quantity'] <= 10) {
+                                            } elseif ($stock <= $threshold) {
                                                 $stockClass = 'warning';
                                             }
                                             ?>
                                             <span class="badge bg-<?php echo $stockClass; ?> stock-badge">
-                                                <?php echo number_format($product['stock_quantity']); ?>
+                                                <?php echo number_format($stock); ?>
                                             </span>
+                                            <?php if ($threshold > 0): ?>
+                                                <br><small class="text-muted">Threshold: <?php echo $threshold; ?></small>
+                                            <?php endif; ?>
                                         </div>
                                         <div class="stock-edit" style="display: none;">
                                             <input type="number" class="form-control form-control-sm stock-input"
-                                                   value="<?php echo $product['stock_quantity']; ?>"
+                                                   value="<?php echo $stock; ?>"
                                                    min="0" style="width: 80px;">
                                         </div>
                                     </td>
                                     <td>
-                                        <?php if ($product['stock_quantity'] == 0): ?>
+                                        <?php if ($stock == 0): ?>
                                             <span class="badge bg-danger">Out of Stock</span>
-                                        <?php elseif ($product['stock_quantity'] <= 10): ?>
+                                        <?php elseif ($stock <= $threshold): ?>
                                             <span class="badge bg-warning">Low Stock</span>
                                         <?php else: ?>
                                             <span class="badge bg-success">In Stock</span>
@@ -392,7 +406,7 @@ try {
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             <button class="btn btn-outline-primary"
-                                                    onclick="updateStock(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['name']); ?>', <?php echo $product['stock_quantity']; ?>)"
+                                                    onclick="updateStock(<?php echo $product['id']; ?>, '<?php echo htmlspecialchars($product['name']); ?>', <?php echo $product['inventory_quantity']; ?>)"
                                                     title="Update Stock">
                                                 <i class="fas fa-edit"></i>
                                             </button>
@@ -416,7 +430,7 @@ try {
                         if ($search) $baseUrl .= "&search=" . urlencode($search);
                         if ($category) $baseUrl .= "&category=" . $category;
                         if ($stockStatus) $baseUrl .= "&stock_status=" . urlencode($stockStatus);
-                        if ($sort !== 'stock_quantity') $baseUrl .= "&sort=" . urlencode($sort);
+                        if ($sort !== 'inventory_quantity') $baseUrl .= "&sort=" . urlencode($sort);
                         if ($order !== 'asc') $baseUrl .= "&order=" . urlencode($order);
 
                         echo generateAdminPagination($page, $totalPages, $baseUrl);
