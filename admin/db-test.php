@@ -19,9 +19,10 @@ try {
 // Test 2: Basic connection test
 echo "<h2>Test 2: Basic Connection</h2>";
 try {
+    // Use MariaDB-compatible query
     $testQuery = "SELECT 1 as test, NOW() as current_time";
     $result = $db->fetchRow($testQuery);
-    
+
     if ($result) {
         echo "<p>✅ Database connection successful</p>";
         echo "<p>Test value: " . $result['test'] . "</p>";
@@ -31,6 +32,28 @@ try {
     }
 } catch (Exception $e) {
     echo "<p>❌ Database connection error: " . htmlspecialchars($e->getMessage()) . "</p>";
+
+    // Try simpler query for MariaDB compatibility
+    try {
+        $simpleQuery = "SELECT 1 as test";
+        $simpleResult = $db->fetchRow($simpleQuery);
+        if ($simpleResult) {
+            echo "<p>✅ Simple database query works</p>";
+
+            // Try time query separately
+            try {
+                $timeQuery = "SELECT NOW() as current_time";
+                $timeResult = $db->fetchRow($timeQuery);
+                if ($timeResult) {
+                    echo "<p>✅ Time query works: " . $timeResult['current_time'] . "</p>";
+                }
+            } catch (Exception $e3) {
+                echo "<p>⚠️ Time query failed: " . htmlspecialchars($e3->getMessage()) . "</p>";
+            }
+        }
+    } catch (Exception $e2) {
+        echo "<p>❌ Even simple query failed: " . htmlspecialchars($e2->getMessage()) . "</p>";
+    }
 }
 
 // Test 3: Check admin_users table
